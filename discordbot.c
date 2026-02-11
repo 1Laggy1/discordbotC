@@ -3,8 +3,14 @@
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
+#include <pthread.h>
+
+struct HeartbeatArgs {
+	CURL *curl;
+	int interval;
+	pthread_mutex_t *mutex;
+};
 
 char* load_token(const char* filename) {
 
@@ -43,6 +49,22 @@ char* load_token(const char* filename) {
 
 }
 
+void *heartbeat_thread(void* args)
+{
+	struct HeartbeatArgs *hb = (struct HeartbeatArgs*)args;
+	size_t sent;
+	const char *ping = "{\"op\": 1, \"d\": null}";
+
+	while(1) {
+		usleep(hb->interval*1000);
+		pthread_mutex_lock(hb->mutex);
+		printf("[THREAD HEARTBEAT] Sending heartbeat...\n ");
+		curl_ws_send(hb->curl, ping, strlen(ping), &sent, 0, CURLWS_TEXT);
+
+		pthread_mutex_unlock(hb->mutex);
+	}
+	return NULL;
+}
 
 void handle_gateway(CURL* curl, int* interval_ptr)
 {
@@ -132,32 +154,31 @@ int main ()
 	char buffer[4096];
 	size_t rlen;
 	const struct curl_ws_frame *meta;
+	
+	//// [THREAD HEARTBEAT]
+	pthread_mutex_t curl_mutex;
+	pthread_mutex_init(&curl_mutex, NULL);
+
+	struct HeartbeatArgs hb_args = {curl, interval, &curl_mutex};
+	pthread_t thread_id;
+	pthread_create(&thread_id, NULL, heartbeat_thread, &hb_args);
+
+	////
 
 	printf("\n --- Bot is started ---\n");
 	while (1)
 	{
 		usleep(100000);
-
+		
+		pthread_mutex_lock(&curl_mutex);
 		CURLcode res = curl_ws_recv(curl, buffer, sizeof(buffer), &rlen, &meta);
+		pthread_mutex_unlock(&curl_mutex);
 
 		if (res == CURLE_OK)
 		{
 			printf("Discord: %.*s\n", (int)rlen, buffer);
-			//
+			
 		}
-
-		time_t now = time(NULL);
-		if (difftime(now, last_heartbeat) >= (interval/1000.0))
-		{
-			printf("[HEARTBEAT]\n");
-			const char* heartbeat = "{\"op\": 1, \"d\": null}";
-			size_t sent;
-			curl_ws_send(curl, heartbeat, strlen(heartbeat), &sent, 0, CURLWS_TEXT);
-			last_heartbeat = now;
-
-		}
-
-		
 	}
 
 	return 0;
