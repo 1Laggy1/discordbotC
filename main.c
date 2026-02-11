@@ -5,6 +5,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
+#include <stdbool.h>
+
+#include "config.h"
 
 struct HeartbeatArgs {
 	CURL *curl;
@@ -12,41 +16,12 @@ struct HeartbeatArgs {
 	pthread_mutex_t *mutex;
 };
 
-char* load_token(const char* filename) {
+static volatile bool keep_running = true;
 
-	FILE* f = fopen(filename, "rb");
-	if (f == NULL) {
-		perror("Cannot open config\n");
-		return NULL;
-	}
-	
-	fseek(f, 0, SEEK_END);
-	long fsize = ftell(f);
-	fseek(f, 0, SEEK_SET);
-
-	char *data = malloc(fsize + 1);
-	fread(data, 1, fsize, f);
-	fclose(f);
-	data[fsize] = '\0';
-	
-	cJSON *json = cJSON_Parse(data);
-	free(data);
-
-	if (json == NULL)
-	{
-		fprintf(stderr, "Failed reading json config\n");
-		return NULL;
-	}
-
-	cJSON *token_obj = cJSON_GetObjectItemCaseSensitive(json, "token");
-	char *token = NULL;
-	if (token_obj != NULL && token_obj->valuestring != NULL)
-	{
-		token = strdup(token_obj->valuestring);
-	}
-	cJSON_Delete(json);
-	return token;
-
+void handle_sigint(int sig)
+{
+	printf("\n%i\nTerminating bot...\n", sig);
+	keep_running = false;
 }
 
 void *heartbeat_thread(void* args)
@@ -143,14 +118,14 @@ void send_identify(CURL* curl, const char* token)
 
 int main ()
 {
-	const char *token = load_token("config.json");
+	signal(SIGINT, handle_sigint);
+	config_load("config.json");
+	const char *token = config_get_string("token");
 	CURL* curl = curl_easy_init();
 	int interval = 0;
 	printf("Starting....\n");
 	handle_gateway(curl, &interval);
 	send_identify(curl, token);
-	free((void*)token);
-	time_t last_heartbeat = time(NULL);
 	char buffer[4096];
 	size_t rlen;
 	const struct curl_ws_frame *meta;
@@ -166,7 +141,7 @@ int main ()
 	////
 
 	printf("\n --- Bot is started ---\n");
-	while (1)
+	while (keep_running)
 	{
 		usleep(100000);
 		
@@ -180,6 +155,10 @@ int main ()
 			
 		}
 	}
-
+	
+	printf("Cleaning...\n");
+	pthread_cancel(thread_id);
+	config_free();
+	curl_easy_cleanup(curl);
 	return 0;
 }
