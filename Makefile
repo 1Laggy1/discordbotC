@@ -1,3 +1,5 @@
+-include Makefile.local
+
 CC = gcc
 
 CFLAGS = -Wall -Wextra -g
@@ -6,7 +8,7 @@ LIBS = -lcurl -lcjson -lpthread
 
 TARGET = discordbotC
 
-OBJ = main.o config.o
+OBJ = main.o config.o discord.o
 
 all: $(TARGET)
 
