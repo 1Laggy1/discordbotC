@@ -15,11 +15,22 @@ static int heartbeat_interval;
 static CURL *curl;
 static pthread_mutex_t curl_mutex;
 
+struct User {
+	char* Name[33];
+	char* ID[21];
+};
+
+struct Message {
+	char* Content[2001];
+	char* ChannelID;
+	struct User* Author;
+};
+
 void discordstop()
 {
 	printf("\nTerminating bot...\n");
         keep_running = false;
-	printf("Cleaning...");
+	printf("Cleaning...\n");
 	keep_running = false;
 	
 	if (heartbeat_thread_id) {
@@ -109,7 +120,7 @@ void handle_gateway(CURL* curl)
 	res = curl_ws_recv(curl, buffer, sizeof(buffer), &rlen, &meta);
 	if (res == CURLE_OK)
 	{
-		printf("Discord: %.*s\n", (int)rlen, buffer);
+		printf(ANSI_COLOR_BLUE "Discord:" ANSI_COLOR_RESET" %.*s\n", (int)rlen, buffer);
 		cJSON *json = cJSON_ParseWithLength(buffer, rlen);
 		if (json)
 		{
@@ -152,7 +163,7 @@ void* bot_working(void* args)
 
                 if (res == CURLE_OK)
                 {
-                        printf("Discord: %.*s\n", (int)rlen, buffer);
+                        printf(ANSI_COLOR_BLUE "Discord:" ANSI_COLOR_RESET " %.*s\n", (int)rlen, buffer);
 
                 }
         }

@@ -1,5 +1,9 @@
+#include <stdio.h>
+#include <stdlib.h>
+
 #include <signal.h>
 #include <stdbool.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "discord.h"
@@ -8,6 +12,7 @@ static volatile bool keep_running = true;
 
 void quit(int sig)
 {
+	printf("%i\n",sig);
 	discordstop();
 	keep_running = false;
 }
