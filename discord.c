@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 
+#include "discord.h"
 #include "config.h"
 static volatile bool keep_running = true;
 static pthread_t heartbeat_thread_id;
@@ -15,16 +16,55 @@ static int heartbeat_interval;
 static CURL *curl;
 static pthread_mutex_t curl_mutex;
 
-struct User {
-	char* Name[33];
-	char* ID[21];
-};
+message_callback message_callback_fn;
 
-struct Message {
-	char* Content[2001];
-	char* ChannelID;
-	struct User* Author;
-};
+
+void SetMessageCallback(message_callback mc)
+{
+	message_callback_fn = mc;
+}
+
+void parse_message_create_in(cJSON* json)
+{
+	if (!message_callback_fn) return;
+	struct Message msg = {0};
+	if (!json) return;
+	cJSON* d = cJSON_GetObjectItemCaseSensitive(json, "d");
+	if (!d) return;
+	cJSON* Name = cJSON_GetObjectItemCaseSensitive(d, "global_name");
+	cJSON* ID = cJSON_GetObjectItemCaseSensitive(d, "id");
+	if ((Name && ID) && Name->valuestring && ID->valuestring)
+	{
+		msg.Author.Name = Name->valuestring;
+		msg.Author.ID = ID->valuestring;
+	}
+
+	cJSON* content = cJSON_GetObjectItemCaseSensitive(d, "content");
+	if (!content || !content->valuestring) return;
+	msg.Content = content->valuestring;
+	cJSON* channel = cJSON_GetObjectItemCaseSensitive(d, "channel_id");
+	if (channel && channel->valuestring)
+	{
+		msg.ChannelID = channel->valuestring;
+	}
+
+	message_callback_fn(&msg);
+
+}
+
+void proccess_full_message(char* message)
+{
+	if (!message)
+		return;
+
+	cJSON* json = cJSON_Parse(message);
+	if (!json)
+		return;
+	cJSON* type = cJSON_GetObjectItemCaseSensitive(json, "t");
+	if (type != NULL && type->valuestring && strcmp(type->valuestring,"MESSAGE_CREATE") == 0)
+		parse_message_create_in(json);
+
+}
 
 void discordstop()
 {
@@ -55,7 +95,7 @@ void send_identify(CURL* curl, const char* token)
         cJSON_AddNumberToObject(root, "op", 2);
         cJSON *d = cJSON_AddObjectToObject(root, "d");
         cJSON_AddStringToObject(d, "token", token);
-        cJSON_AddNumberToObject(d, "intents", 513);
+        cJSON_AddNumberToObject(d, "intents", 33281);
 
         cJSON *properties = cJSON_AddObjectToObject(d, "properties");
         cJSON_AddStringToObject(properties, "os", "linux");
@@ -152,24 +192,53 @@ void* bot_working(void* args)
 	char buffer[16384];
         size_t rlen;
         const struct curl_ws_frame *meta;
+
+	char *full_message = NULL;
+	size_t full_len = 0;
+
 	printf("\n --- Bot is started ---\n");
         while (keep_running)
         {
-                usleep(100000);
+		if (full_len == 0) {
+                	usleep(100000);
+		}
 
                 pthread_mutex_lock(&curl_mutex);
                 CURLcode res = curl_ws_recv(curl, buffer, sizeof(buffer), &rlen, &meta);
                 pthread_mutex_unlock(&curl_mutex);
 
-                if (res == CURLE_OK)
+                if (res == CURLE_OK && rlen > 0)
                 {
-                        printf(ANSI_COLOR_BLUE "Discord:" ANSI_COLOR_RESET " %.*s\n", (int)rlen, buffer);
 
+			char *new_ptr = realloc(full_message, full_len + rlen + 1);
+			if (!new_ptr) {
+				fprintf(stderr, "Out of memory!\n");
+				free(full_message);
+				full_len = 0;
+				continue;
+			}
+			full_message = new_ptr;
+
+			memcpy(full_message + full_len, buffer, rlen);
+			full_len += rlen;
+			full_message[full_len] = '\0';
+			
+			if (meta->bytesleft == 0)
+			{
+				printf(ANSI_COLOR_BLUE "Discord:" ANSI_COLOR_RESET " %s\n", full_message);
+				proccess_full_message(full_message);
+				free(full_message);
+				full_message = NULL;
+				full_len = 0;
+
+			}
                 }
         }
 	printf("\n Bot thread stopping working...");
 	return NULL;
 }
+
+
 
 int discordstart()
 {
