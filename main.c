@@ -24,10 +24,11 @@ int main ()
 	{
 		quit(2);
 	}
+	discord_send_message("659740413476995076", "Hello!");
 	while (keep_running)
 	{
 		usleep(100000);
-		
+	
 	}
 	
 	return 0;

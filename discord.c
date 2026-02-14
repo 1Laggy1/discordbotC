@@ -14,7 +14,9 @@ static pthread_t heartbeat_thread_id;
 static pthread_t bot_thread_id;
 static int heartbeat_interval;
 static CURL *curl;
+static CURL *curl_http;
 static pthread_mutex_t curl_mutex;
+static pthread_mutex_t http_mutex;
 
 message_callback message_callback_fn;
 
@@ -238,7 +240,61 @@ void* bot_working(void* args)
 	return NULL;
 }
 
+void send_raw_http(const char *method, const char* url, const cJSON* message)
+{
+	if (!curl_http || !url || !message) return;
+	pthread_mutex_lock(&http_mutex);
+	
+	char *json_str;
+	
+	curl_easy_setopt(curl_http, CURLOPT_CUSTOMREQUEST, method);
+	curl_easy_setopt(curl_http, CURLOPT_URL, url);
+	if (message) {
+		json_str = cJSON_PrintUnformatted(message);
+		curl_easy_setopt(curl_http, CURLOPT_POSTFIELDS, json_str);
+	} else {
+		curl_easy_setopt(curl_http, CURLOPT_POSTFIELDS, NULL);
+	}
 
+	CURLcode res = curl_easy_perform(curl_http);
+	if (res != CURLE_OK) {
+		fprintf(stderr, ANSI_COLOR_RED "send_raw_http: Error %s" ANSI_COLOR_RESET "\n", curl_easy_strerror(res));
+	}
+
+	if (json_str) free(json_str);
+	
+	curl_easy_setopt(curl_http, CURLOPT_CUSTOMREQUEST, method);
+	pthread_mutex_unlock(&http_mutex);
+	
+}
+
+void init_http(const char* token)
+{
+	curl_http = curl_easy_init();
+	pthread_mutex_init(&http_mutex, NULL);
+	struct curl_slist *common_headers = NULL;
+	char auth_header[256];
+	snprintf(auth_header, sizeof(auth_header), "Authorization: Bot %s", token);
+	common_headers = curl_slist_append(common_headers, auth_header);
+	common_headers = curl_slist_append(common_headers, "Content-Type: application/json");
+
+	curl_easy_setopt(curl_http, CURLOPT_HTTPHEADER, common_headers);
+
+}
+
+void discord_send_message(const char* channel_id, const char* message)
+{	
+	if (!channel_id || !message) return;
+
+	char url[256];
+	snprintf(url, sizeof(url), "https://discord.com/api/v10/channels/%s/messages", channel_id);
+
+	cJSON* json = cJSON_CreateObject();
+	cJSON_AddStringToObject(json, "content", message);
+
+	send_raw_http("POST", url, json);
+	cJSON_Delete(json);
+}
 
 int discordstart()
 {
@@ -249,7 +305,8 @@ int discordstart()
 	      printf("Failed to get token\n");
 		return 1;	      
 	}
-		curl = curl_easy_init();
+	init_http(token);
+	curl = curl_easy_init();
 	printf("Starting....\n");
         handle_gateway(curl);
         if (heartbeat_interval < 1)
