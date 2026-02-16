@@ -91,13 +91,38 @@ void discordstop()
         return;
 }
 
+int calculate_intents()
+{
+	int intents = 1; // Base Intents;
+
+	if (config_get_bool("MessageIntent"))
+	{
+		intents |= (1 << 9); // Guild_Messages
+		intents |= (1 << 15); // Message_Content
+	}
+
+	if (config_get_bool("PresenceIntent"))
+	{
+		intents |= (1 << 8); // Guild_Presence
+	}
+
+	if (config_get_bool("ServerIntent"))
+	{
+		intents |= (1 << 1); // Guild_Members
+	}
+
+	return intents;
+
+}
+
 void send_identify(CURL* curl, const char* token)
 {
         cJSON *root = cJSON_CreateObject();
         cJSON_AddNumberToObject(root, "op", 2);
         cJSON *d = cJSON_AddObjectToObject(root, "d");
         cJSON_AddStringToObject(d, "token", token);
-        cJSON_AddNumberToObject(d, "intents", 33281);
+
+        cJSON_AddNumberToObject(d, "intents", calculate_intents());
 
         cJSON *properties = cJSON_AddObjectToObject(d, "properties");
         cJSON_AddStringToObject(properties, "os", "linux");

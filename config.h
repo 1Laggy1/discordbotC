@@ -13,6 +13,8 @@ const char *config_get_string(const char* key);
 
 int config_get_int(const char* key);
 
+bool config_get_bool(const char* key);
+
 void config_free();
 
 #endif
