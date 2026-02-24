@@ -13,6 +13,7 @@ int config_create(const char* filename)
 	int result = 0;
 	cJSON* config = cJSON_CreateObject();
 	cJSON_AddStringToObject(config, "token", "");
+	cJSON_AddStringToObject(config, "GuildID", "");
 	cJSON_AddBoolToObject(config, "PresenceIntent", false);
 	cJSON_AddBoolToObject(config, "ServerIntent", false);
 	cJSON_AddBoolToObject(config, "MessageIntent", true);

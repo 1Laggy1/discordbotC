@@ -17,6 +17,8 @@ typedef void (*message_callback)(struct Message*);
 
 void discord_send_message(const char* channel_id, const char* message);
 
+void discord_grant_role(const char* userID, const char* RoleID);
+
 void send_raw_http(const char *method, const char* url, const cJSON* message);
 void SetMessageCallback(message_callback mc);
 int discordstart();

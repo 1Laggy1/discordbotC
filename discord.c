@@ -17,9 +17,9 @@ static CURL *curl;
 static CURL *curl_http;
 static pthread_mutex_t curl_mutex;
 static pthread_mutex_t http_mutex;
+static char GuildID[20];
 
 message_callback message_callback_fn;
-
 
 void SetMessageCallback(message_callback mc)
 {
@@ -86,6 +86,7 @@ void discordstop()
 
 	config_free();
         curl_easy_cleanup(curl);
+
 	printf("Success\n");
 	
         return;
@@ -267,10 +268,12 @@ void* bot_working(void* args)
 
 void send_raw_http(const char *method, const char* url, const cJSON* message)
 {
-	if (!curl_http || !url || !message) return;
+	if (!curl_http || !url) return;
+
+	printf(ANSI_COLOR_RED"MUTEX LOCK\n"ANSI_COLOR_RESET);
 	pthread_mutex_lock(&http_mutex);
 	
-	char *json_str;
+	char *json_str = NULL;
 	
 	curl_easy_setopt(curl_http, CURLOPT_CUSTOMREQUEST, method);
 	curl_easy_setopt(curl_http, CURLOPT_URL, url);
@@ -289,6 +292,7 @@ void send_raw_http(const char *method, const char* url, const cJSON* message)
 	if (json_str) free(json_str);
 	
 	curl_easy_setopt(curl_http, CURLOPT_CUSTOMREQUEST, method);
+	printf(ANSI_COLOR_RED"MUTEX UNLOCK\n"ANSI_COLOR_RESET);
 	pthread_mutex_unlock(&http_mutex);
 	
 }
@@ -304,7 +308,9 @@ void init_http(const char* token)
 	common_headers = curl_slist_append(common_headers, "Content-Type: application/json");
 
 	curl_easy_setopt(curl_http, CURLOPT_HTTPHEADER, common_headers);
-
+	curl_easy_setopt(curl_http, CURLOPT_NOSIGNAL, 1L);
+	curl_easy_setopt(curl_http, CURLOPT_TIMEOUT, 10L);        // Весь запит не довше 10 сек
+curl_easy_setopt(curl_http, CURLOPT_CONNECTTIMEOUT, 5L); // З'єднання не довше 5 сек
 }
 
 void discord_send_message(const char* channel_id, const char* message)
@@ -321,6 +327,22 @@ void discord_send_message(const char* channel_id, const char* message)
 	cJSON_Delete(json);
 }
 
+void discord_grant_role(const char* userID, const char* RoleID)
+{
+	printf(ANSI_COLOR_RED"Granting role 1"ANSI_COLOR_RESET);
+	if(!userID || !RoleID)	return;
+	 printf(ANSI_COLOR_RED"Granting role 2"ANSI_COLOR_RESET);
+	
+	char url[512];
+
+	snprintf(url, sizeof(url), "https://discord.com/api/v10/guilds/%s/members/%s/roles/%s", GuildID, userID, RoleID);
+
+	send_raw_http("PUT", url, NULL);
+
+	 printf(ANSI_COLOR_RED"Granting role 3"ANSI_COLOR_RESET);
+
+}
+
 int discordstart()
 {
 	config_load("config.json");
@@ -330,6 +352,8 @@ int discordstart()
 	      printf("Failed to get token\n");
 		return 1;	      
 	}
+	strncpy(GuildID, config_get_string("GuildID"), sizeof(GuildID)-1);
+	GuildID[sizeof(GuildID)-1] = '\0';
 	init_http(token);
 	curl = curl_easy_init();
 	printf("Starting....\n");
