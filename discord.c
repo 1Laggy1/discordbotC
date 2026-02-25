@@ -270,18 +270,21 @@ void send_raw_http(const char *method, const char* url, const cJSON* message)
 {
 	if (!curl_http || !url) return;
 
-	printf(ANSI_COLOR_RED"MUTEX LOCK\n"ANSI_COLOR_RESET);
 	pthread_mutex_lock(&http_mutex);
 	
 	char *json_str = NULL;
-	
+
+
 	curl_easy_setopt(curl_http, CURLOPT_CUSTOMREQUEST, method);
 	curl_easy_setopt(curl_http, CURLOPT_URL, url);
 	if (message) {
 		json_str = cJSON_PrintUnformatted(message);
 		curl_easy_setopt(curl_http, CURLOPT_POSTFIELDS, json_str);
+		curl_easy_setopt(curl_http, CURLOPT_POSTFIELDSIZE, (long)strlen(json_str));
 	} else {
-		curl_easy_setopt(curl_http, CURLOPT_POSTFIELDS, NULL);
+
+		curl_easy_setopt(curl_http, CURLOPT_POSTFIELDS, ""); 
+    		curl_easy_setopt(curl_http, CURLOPT_POSTFIELDSIZE, 0L);
 	}
 
 	CURLcode res = curl_easy_perform(curl_http);
@@ -309,8 +312,8 @@ void init_http(const char* token)
 
 	curl_easy_setopt(curl_http, CURLOPT_HTTPHEADER, common_headers);
 	curl_easy_setopt(curl_http, CURLOPT_NOSIGNAL, 1L);
-	curl_easy_setopt(curl_http, CURLOPT_TIMEOUT, 10L);        // Весь запит не довше 10 сек
-curl_easy_setopt(curl_http, CURLOPT_CONNECTTIMEOUT, 5L); // З'єднання не довше 5 сек
+	curl_easy_setopt(curl_http, CURLOPT_TIMEOUT, 10L);
+	curl_easy_setopt(curl_http, CURLOPT_CONNECTTIMEOUT, 5L);
 }
 
 void discord_send_message(const char* channel_id, const char* message)
@@ -329,17 +332,14 @@ void discord_send_message(const char* channel_id, const char* message)
 
 void discord_grant_role(const char* userID, const char* RoleID)
 {
-	printf(ANSI_COLOR_RED"Granting role 1"ANSI_COLOR_RESET);
 	if(!userID || !RoleID)	return;
-	 printf(ANSI_COLOR_RED"Granting role 2"ANSI_COLOR_RESET);
 	
 	char url[512];
 
 	snprintf(url, sizeof(url), "https://discord.com/api/v10/guilds/%s/members/%s/roles/%s", GuildID, userID, RoleID);
-
+	printf(ANSI_COLOR_RED"%s\n"ANSI_COLOR_RESET, url);
 	send_raw_http("PUT", url, NULL);
 
-	 printf(ANSI_COLOR_RED"Granting role 3"ANSI_COLOR_RESET);
 
 }
 

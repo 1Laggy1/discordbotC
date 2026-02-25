@@ -24,8 +24,10 @@ int main ()
 	{
 		quit(2);
 	}
-	discord_send_message("659740413476995076", "Hello!");
+	
 	discord_grant_role("401105413703073793", "1473200764460601467");
+	discord_send_message("659740413476995076", "Hello!");
+
 	while (keep_running)
 	{
 		usleep(100000);
